@@ -2,7 +2,7 @@ FROM debian:latest
 MAINTAINER Christian Ashby <docker@cashby.me.uk>
 # Install OS package prerequisites and configure apache
 RUN DEBIAN_FRONTEND=noninteractive apt-get update && \
-    apt-get install -y apache2 python python-psutil wget build-essential cron rsyslog git && \
+    apt-get install -y apache2 python3 python3-psutil python3-urllib3 wget build-essential cron rsyslog git && \
     mkdir /var/lock/apache2 && \
     a2enmod cgi && \
     a2enmod rewrite && \
@@ -42,7 +42,6 @@ RUN mkdir -p /var/run/apache2/cgisock
 # Fix cron issue (see http://stackoverflow.com/questions/21926465/issues-running-cron-in-docker-on-different-hosts)
 RUN cat /etc/pam.d/cron | grep -v pam_loginuid.so > /etc/pam.d/cron2 && mv /etc/pam.d/cron2 /etc/pam.d/cron
 # And do some clean-up
-CMD ["-m", "128"]
 ENV APACHE_RUN_USER www-data
 ENV APACHE_RUN_GROUP www-data
 ENV APACHE_LOG_DIR /var/log/apache2
@@ -54,5 +53,6 @@ EXPOSE 80
 VOLUME /home/iplayer
 
 USER 0
-CMD service rsyslog start && service cron start && /usr/sbin/apache2 -DFOREGROUND
+# newer Debian's rsyslog package no longer ships a sysvinit script, so start the daemon directly
+CMD rsyslogd; service cron start; /usr/sbin/apache2 -DFOREGROUND
 
