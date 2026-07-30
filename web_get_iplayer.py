@@ -548,21 +548,60 @@ def page_kill(p_unix_pid):
 
 
 #####################################################################################################################
+def download_process_running(item):
+    """ returns True if the queue item's recorded unix_pid is a live
+        download process, False if the process has gone away.
+        checks the command line as well as pid liveness so that an
+        unrelated process which reused the pid doesn't count """
+
+    try:
+        unix_pid = int(item['unix_pid'])
+    except (KeyError, TypeError, ValueError):
+        return False
+
+    if unix_pid <= 0:
+        return False
+
+    try:
+        proc_cmdline = ' '.join(psutil.Process(unix_pid).cmdline())
+    except psutil.Error:
+        return False
+
+    return 'get_iplayer' in proc_cmdline
+
+
+#####################################################################################################################
 def cron_run_download():
     """ this is the function called when in cron mode to process download queue"""
 
     global dbg_level
 
-    # get active queue, if it's not empty, then exit as only one download may be active
+    # get active queue, if a download is genuinely running then exit as
+    # only one download may be active.  if the queue is non-empty but the
+    # download process has died (e.g. the machine or container restarted
+    # mid-download, so the normal cleanup never ran) then reap the stale
+    # entry, otherwise it blocks the queue forever
     # FIXME! allow multiple active downloads
     active_queue = []
-    aqi = 0         # count pending queue entries, -1 if queue couldn't be read
+    stale_items = []
+    aqi = 0         # count active queue entries, -1 if queue couldn't be read
     a_q_f_name = os.path.join(CONTROL_DIR, ACTIVE_QUEUE)
     if os.path.isfile(a_q_f_name):
         aqi = read_queue(active_queue, a_q_f_name)
         if aqi > 0:
-            print('Info, active queue is not empty, so cron downloads terminating')
-            return 0
+            if download_process_running(active_queue[0]):
+                print('Info, active queue is not empty, so cron downloads terminating')
+                return 0
+
+            print('Warn, active item %s has no running download process, reaping stale entry' % (active_queue[0]['pid'], ))
+            stale_items = active_queue
+            for stale_item in stale_items:
+                stale_item['status'] = 'download died, stale queue entry reaped'
+                stale_item['TT_finished'] = time.time()
+                stale_item['unix_pid'] = ''
+            active_queue = []
+            if write_queue(active_queue, a_q_f_name) == -1:
+                print('Error, failed to write empty active file')
 
 
     # get pending queue
@@ -612,6 +651,15 @@ def cron_run_download():
             exit(1)
     else:
         print('Info, recent items list hasn\'t been created')
+
+    # record any reaped stale downloads in the recent items list so
+    # they're visible in the web interface
+    if len(stale_items) > 0:
+        recent_queue.extend(stale_items)
+        while len(recent_queue) >= int(my_settings.get(SETTINGS_SECTION, 'max_recent_items')):
+            recent_queue.pop(0)
+        if write_queue(recent_queue, r_c_f_name) == -1:
+            print('Error, failed to write recent items file')
 
 
     # transcode submissions
