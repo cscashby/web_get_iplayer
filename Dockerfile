@@ -1,5 +1,12 @@
-FROM debian:bookworm
+# buster, NOT anything newer: apache >= bullseye needs the getrandom()
+# syscall (kernel 3.17+), and Synology NAS kernels are still 3.10 —
+# AH00141 "Could not initialize random number generator" at startup
+FROM debian:buster
 MAINTAINER Christian Ashby <docker@cashby.me.uk>
+# buster is EOL, packages now live on archive.debian.org
+RUN echo 'deb http://archive.debian.org/debian buster main contrib non-free' > /etc/apt/sources.list && \
+    echo 'deb http://archive.debian.org/debian-security buster/updates main' >> /etc/apt/sources.list && \
+    echo 'Acquire::Check-Valid-Until "false";' > /etc/apt/apt.conf.d/99archive
 # Install OS package prerequisites and configure apache
 RUN DEBIAN_FRONTEND=noninteractive apt-get update && \
     apt-get install -y apache2 python3 python3-psutil python3-urllib3 wget build-essential cron rsyslog git && \
