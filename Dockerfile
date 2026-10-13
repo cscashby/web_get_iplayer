@@ -19,7 +19,10 @@ RUN apt-get update && \
 COPY ts-to-mp4.sh /usr/local/bin
 RUN chmod +x /usr/local/bin/ts-to-mp4.sh
 # Install development prerequisites
-RUN DEBIAN_FRONTEND=noninteractive apt-get install -y libssl-dev libhtml-parser-perl libhttp-cookies-perl libwww-perl libxml-simple-perl libxml-libxml-perl
+# get_iplayer indexes schedules with Mojo::UserAgent; without Mojolicious its
+# cache refresh silently adds 0 programmes (it skips the LWP fallback)
+RUN DEBIAN_FRONTEND=noninteractive apt-get install -y libssl-dev libhtml-parser-perl libhttp-cookies-perl libwww-perl libxml-simple-perl libxml-libxml-perl \
+    libmojolicious-perl libio-socket-ssl-perl liblwp-protocol-https-perl
 # Install the get_iplayer script and run it to ensure we have the appropriate cache set up in our ~
 WORKDIR /usr/lib/cgi-bin
 RUN wget https://raw.githubusercontent.com/get-iplayer/get_iplayer/master/get_iplayer && \
